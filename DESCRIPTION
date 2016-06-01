@@ -1,10 +1,12 @@
 Package: gisdtR
 Type: Package
-Title: What the Package Does (Title Case)
-Version: 0.1
-Date: 2015-11-06
-Author: Who wrote it
-Maintainer: Who to complain to <yourfault@somewhere.net>
-Description: More about what it does (maybe more than one line)
+Title: gisdtR
+Version: 0.2
+Date: 2016-03-20
+Author: Tom Stockton
+Maintainer: Tom Stockton <stockton@neptuneinc.org>
+Description: gisdtR
 License: What license is it under?
 LazyData: TRUE
+RoxygenNote: 5.0.1
+Imports: gbm, gRain, XLConnect

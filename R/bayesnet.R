@@ -1,37 +1,44 @@
 bayesnet = function(nodes){
-  # 'Add together two numbers.
-  #
-  # '@param nodes A number.
-  # '@return The sum of \code{x} and \code{y}.
-  # '@examples
-  # 'add(1, 1)
-  # '@export
+  #' Solve Bayesian Network
+  #'
+  #' @param nodes Bayesian Network with Conditional Probability tables (JSON).
+  #' @return Bayesian Network with posterior distributions.
+  #' @export
   options(stringsAsFactors=FALSE)
   library(gRain);
-  
-  return(nodes)
-  
-  dag.nodes = jsonlite::fromJSON(nodes);
+  if(class(nodes) == "character"){
+    dag.nodes = as.data.frame(do.call("rbind",rjson::fromJSON(nodes)));
+  }else{
+    dag.nodes = as.data.frame(do.call("rbind",nodes));
+  }
   cpt.list = vector("list",nrow(dag.nodes))
-  names(cpt.list) = dag.nodes$name
+  names(cpt.list) = as.character(dag.nodes$id)
   evidence.list = vector("list",nrow(dag.nodes))
-  names(evidence.list) = dag.nodes$name
+  names(evidence.list) = as.character(dag.nodes$id)
   for(i in 1:nrow(dag.nodes)){  # i = 1
-    bbn = rjson::fromJSON(dag.nodes$specification[i])$bbn
-    vpar = dag.nodes$name[match(bbn$vpar,dag.nodes$id)]
+    bbn = dag.nodes$specification[[i]]$bbn
+    vpar = as.character(unlist(dag.nodes$id)[match(bbn$vpar,unlist(dag.nodes$id))])
     cpt.list[[i]] = cptable(vpar=vpar,levels=bbn$levels,values=bbn$values)
-    if(bbn$use_evidence){
-      evidence.list[[i]] = bbn$evidence  
+    if(as.logical(bbn$use_evidence) & length(bbn$levels[bbn$evidence==1])>0){
+      evidence.list[[i]] = bbn$levels[bbn$evidence==1] #as.logical(bbn$use_evidence)
     }
+
+    #if(as.logical(bbn$use_evidence)){
+    #  evidence.list[[i]] = as.logical(bbn$use_evidence)
+    #}
   }
   cpt.compiled = compileCPT(cpt.list)
   thisGrain = compile(grain(cpt.compiled),propagate = TRUE)
   evidence.list = evidence.list[!sapply(evidence.list, is.null)]
-  thisGrain = setEvidence(thisGrain,nslist=evidence.list)
-  posterior = lapply(querygrain(thisGrain,dag.nodes$name),function(node){
-    paste('{"level":"',names(node),'","value":',node,"}",sep='',collapse=",")
-  })
-  json_result = paste('[',paste('{"id":',dag.nodes$id[match(names(posterior),dag.nodes$name)],
-                                ',"name":"',names(posterior),'","posterior":[',posterior,"]}",
+  #thisGrain = setEvidence(thisGrain,evidence=evidence.list)
+  thisGrain = setEvidence(thisGrain,nodes=names(evidence.list),states=evidence.list)
+  posterior = lapply(
+    querygrain(thisGrain,as.character(unlist(dag.nodes$id)))
+    ,function(node){
+      paste('{"level":"',names(node),'","value":',node,"}",sep='',collapse=",")
+    })
+  json_result = paste('[',paste('{"id":',names(posterior),
+                                ',"name":"',dag.nodes$name[match(names(posterior),dag.nodes$id)],'","posterior":[',posterior,"]}",
                                 sep="",collapse=","),']',sep="")
+  json_result
 }
