@@ -9,6 +9,7 @@ mcsim <- function(nodes,edges,nsim=100){
   #' @param edges (JSON).
   #' @return Bayesian Network with posterior distributions.
   #' @export
+  #' 
   options(stringsAsFactors=FALSE)
   library(rjson);library(graph);
   # nodesJson = nodes; edgesJson = edges;

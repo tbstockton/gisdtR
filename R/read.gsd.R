@@ -1,4 +1,5 @@
 read.gsd = function(gsd.dir="gsd",gsd.version,skip=0) {
+
   # read in gsd(z) files
   # gsd.version is grep'ed in a list of available files in gsd.dir 
   # so it will read in multiple files

@@ -11,7 +11,6 @@ sa = function(response=NULL,data=NULL,gsd.version = NULL,gsd.dir="gsd",
               remove.fields=NULL,new.fields=NULL,Rdata.name=NULL,label.prefix="",
               bright_line=NULL){
   #' Sensitivity Analysis using Machine Learning
-  #'
   #' @param response .
   #' @param data .
   #' @param gsd.version .

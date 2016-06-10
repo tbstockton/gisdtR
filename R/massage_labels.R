@@ -1,6 +1,6 @@
 massage.labels = function(gsd.labels,labels.table="massage_labels.txt",final.cleanup=TRUE){
 
-  # Read in an Excel speadsheet with a gsd_label column that indicates the label to change
+    # Read in an Excel speadsheet with a gsd_label column that indicates the label to change
   # to the pretty_label column
   # gsd.labels = names(gsd.df)
   gsd.labels =  as.character(gsd.labels)
