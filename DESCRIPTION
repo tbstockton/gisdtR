@@ -1,12 +1,12 @@
 Package: gisdtR
 Type: Package
 Title: gisdtR
-Version: 0.2
-Date: 2016-03-20
+Version: 0.3
+Date: 2016-10-05
 Author: Tom Stockton
 Maintainer: Tom Stockton <stockton@neptuneinc.org>
-Description: gisdtR
-License: What license is it under?
+Description: gisdtR includes functions for Bayesian Belief Networks and Monte Carlo simulation.
+License: GPL-2 | GPL-3
 LazyData: TRUE
-RoxygenNote: 5.0.1
-Imports: gbm, gRain, XLConnect
+RoxygenNote: 6.0.1
+Imports: graph, gRbase, gRain, RJSONIO, rjson
