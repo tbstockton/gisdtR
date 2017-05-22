@@ -1,21 +1,21 @@
-mcsim <- function(nodes,edges,nsim=100){
+mcsim <- function(nodes,edges,scenarios,nsim=100){
   #' This is a wrapper function that calls the simulcalcs() function, which is the workhorse of the network simulations.
   #' Read nodes and edges tables from the database and build the DAG
   #' mcsim(schema,nodeTable,outputTable)
-  #' Written by Tom Stockton and Will Barnett, November 2011.
-  #' Updated 05-22-12, 07-04-2014
+  #' Tom Stockton and Will Barnett, November 2011.
+  #' Updated 05-22-12, 07-04-2014, 12-16-2016
   #' mcsim(schema='watershed', nodeTable='model')
   #' @param nodes (JSON).
   #' @param edges (JSON).
+  #' @param nsim, number of Monte carlo simulations to run.
   #' @return Bayesian Network with posterior distributions.
   #' @export
-  #' 
   options(stringsAsFactors=FALSE)
-  library(rjson);library(graph);
-  # nodesJson = nodes; edgesJson = edges;
-  graph.nodes = nodes; as.data.frame(do.call("rbind",nodes))
-  graph.edges = as.data.frame(do.call("rbind",edges))
-  scenarioNodes = as.data.frame(do.call("rbind",scenarios))
+  library(graph);
+
+  graph.nodes = as.data.frame(do.call("rbind",rjson::fromJSON(nodes)))
+  graph.edges = as.data.frame(do.call("rbind",rjson::fromJSON(edges)))
+  scenarioNodes = as.data.frame(do.call("rbind",rjson::fromJSON(scenarios)))
 #   modelTime = pg.spi.exec(paste("select content from ",schema,".context WHERE name='foo'",sep=""))$content
 #   if(!is.null(modelTime)){
 #     modelTime = fromJSON(modelTime)[[1]]
@@ -23,51 +23,40 @@ mcsim <- function(nodes,edges,nsim=100){
 #     assign("modelTime",modelTime,envir = .GlobalEnv)
 #   }
 # if(is.null(nsim)){assign("nsim",10000,envir = .GlobalEnv)}
-  # setup up the time of the model run.
-  # read in the model nodes and contruct the DAG
-#   graph.nodes = pg.spi.exec(paste("select * from ",schema,".",nodeTable,sep=""))
-#   graph.edges = pg.spi.exec(paste("select * from ",schema,".",nodeTable,"_edges",sep=""))
-  #g = ftM2graphNEL(cbind(graph.edges$"from_name",graph.edges$"to_name"))
-  g = ftM2graphNEL(cbind(graph.edges$node_from,graph.edges$node_to))
+  #' setup up the time of the model run.
+  #' read in the model nodes and contruct the DAG
+  g = ftM2graphNEL(cbind(graphEdges$node_from,graphEdges$node_to))
   # Rgraphviz::renderGraph(Rgraphviz::layoutGraph(g)); # Rgraphviz::renderGraph(plot.graph("watershed","model"))
-  # Node names may have spaces. Replace them with "_" via 'gsub.'
-#   nodes(g) = gsub(" ","_",nodes(g))
-#   graph.nodes$name = gsub(" ","_",graph.nodes$name)
-  # keep only nodes that have edges (ie, drop orphan nodes)
-  #used_nodes <- graph::nodes(g)
-  # ind = match(nodes(g),graph.nodes$name)
-#   graph.nodes = graph.nodes[graph.nodes$name %in% nodes(g),]
-#   row.names(graph.nodes) = graph.nodes$name
-#   complete = simulcalcs(g=g,graph.nodes=graph.nodes,schema,nsim=nsim)
+  #' Node names may have spaces. Replace them with "_" via 'gsub.'
+  graph.nodes$name = gsub(" ","_",graph.nodes$name)
+  nodes(g) = graph.nodes[match(nodes(g),unlist(graph.nodes$id)),"name"]
+  #' keep only nodes that have edges (ie, drop orphan nodes)
+  # graph.nodes = graph.nodes[graph.nodes$id %in% nodes(g),]
+  row.names(graph.nodes) = graph.nodes$name
+  complete = simulcalcs(g=g,graph.nodes=graph.nodes,schema,nsim=nsim)
   return("{'message':'complete'}")
 }
 
 simulcalcs <- function(g,graph.nodes,scenarios.nodes,schema,nsim=5){
-  # simulcalcs.R
-  # Will Barnett and Tom Stockton, November 2011.
-  # simulcalcs() will perform Monte Carlo simulations of DAG. It calls
-  # simulnode() for each node in the graph, and returns
-  # a storage data frame with the node ids, node names, and simulated values.
-  # g = DAG in the graphNEL object form.
-  # graph.nodes = the data frame computed from the SQL query.
-  # nsim = number of simulations desired.
+  #' Tom Stockton and Will Barnett, November 2011.
+  #' simulcalcs() will perform Monte Carlo simulations of DAG. It calls
+  #' simulnode() for each node in the graph, and returns
+  #' a storage data frame with the node ids, node names, and simulated values.
+  #' @param g DAG in the graphNEL object form.
+  #' @param graph.nodes = the data frame computed from the SQL query.
+  #' @param nsim = number of simulations desired.
   require(rjson)
   probs = seq(0.01,0.99,by=0.01)
-  # Figure out the longest ancestry in the graph.
-  # anc = apply(gRbase::as.adjMAT(g),2,sum)
-  # Find out which nodes are roots; i.e., no parents. And how many of them there are.
-  # roots = nodes(g)[apply(gRbase::as.adjMAT(g),2,sum) == 0]
-  # leaves = nodes(g)[apply(gRbase::as.adjMAT(g),1,sum) == 0]
+  #' Figure out the longest ancestry in the graph.
   roots = graph::leaves(g,"in")
   leaves = graph::leaves(g,"out")
-  # Simulate nodes sequentially and store results.
-  optionNodes = graph.nodes$name
-  [graph.nodes$type == "option"]
+  #' Simulate nodes sequentially and store results.
+  optionNodes = graph.nodes$name[graph.nodes$type == "option"]
   stochasticNodes = graph.nodes$name[grepl("distribution",graph.nodes$specification) &
                                        !grepl("equation|function|time",graph.nodes$specification)]
   #scenarioNodes = scenarios #pg.spi.exec(paste("select * from ",schema,".","management_scenarios",sep=""))
   if( is.null(scenarioNodes) || nrow(scenarioNodes) == 0 ) scenarioNodes = data.frame(id=1,name="Base Case")
-  # Initialize list to hold results
+  #' Initialize list to hold results
   level.list = vector("list",nrow(graph.nodes))
   names(level.list) = nodes(g)
   scenLevel.list = vector("list",length(scenarioNodes$id))
@@ -82,37 +71,34 @@ simulcalcs <- function(g,graph.nodes,scenarios.nodes,schema,nsim=5){
   names(scenIndex.list) = scenarioNodes$name
 
   if(length(stochasticNodes)==1){nsims=1}
-  # Start while loop to iterate through the 'levels' of the network. Each level is a subset of nodes which have
-  # previously-simulated parents (or none at all, in the case of the root nodes).
+  #' Start while loop to iterate through the 'levels' of the network. Each level is a subset of nodes which have
+  #' previously-simulated parents (or none at all, in the case of the root nodes).
   level = roots
   nodesNotDone = nodes(g) # The while loop requires nodesNotDone to be > 0.
   nodesDone = NULL
   while( length(nodesNotDone) > 0 ){
-    # loop through current set of unsolved root nodes
-    for( thisLevel in level ){ #   thisLevel = level[1]
-      cat(thisLevel,"\n")
-      nodesDone = c(nodesDone,thisLevel)
-      nodesNotDone = nodesNotDone[!grepl(thisLevel,nodesNotDone)]
-      nodeSpec = fromJSON(
-        graph.nodes$specification[graph.nodes$id==thisLevel][[1]][[1]]$rows
-        )
-      nodeSpec$id = graph.nodes[thisLevel,"id"]
-      nodeSpec$class = ifelse(!is.null(graph.nodes[thisLevel,"class"]),graph.nodes[thisLevel,"class"],graph.nodes[thisLevel,"type"])
+    #' loop through current set of unsolved root nodes
+    for( thisNode in level ){ #   thisNode = level[1]
+      cat(thisNode,"\n")
+      nodesDone = c(nodesDone,thisNode)
+      nodesNotDone = nodesNotDone[!grepl(thisNode,nodesNotDone)]
+      nodeSpec = graph.nodes[thisNode,"specification"][[1]]
+      nodeSpec$id = graph.nodes[thisNode,"id"]
+      nodeSpec$type = nodeSpec$class = ifelse(!is.null(graph.nodes[thisNode,"class"][[1]]),graph.nodes[thisNode,"class"][[1]],graph.nodes[thisNode,"type"][[1]])
       thisNodeTable = switch(nodeSpec$class, "index" = "indices", "measure" = "measurable_attributes", "state" = "states")
       if( is.null(nodeSpec$type) ) { nodeSpec$type = "missing" }
-      for(thisScen in scenarioNodes$name){  # thisScen = scenarioNodes$name[1]
-        scenId = scenarioNodes$id[scenarioNodes$name == thisScen]
+      for(thisScen in scenarioNodes$name){  # thisScen = scenarioNodes$name[1][[1]]
+        scenId = scenarioNodes$id[scenarioNodes$name == thisScen][[1]]
         nodeLevels = simulnode(spec=nodeSpec,data=scenLevel.list[[thisScen]],n=nsim,scenId=scenId)
-        scenLevel.list[[thisScen]][[thisLevel]] = nodeLevels
+        scenLevel.list[[thisScen]][[thisNode]] = nodeLevels
         # calculate the value function for measures
         if( nodeSpec$class == "measure" ){
           thisNodeValueFunction = as.data.frame(do.call("rbind",nodeSpec$rows))
-          value.list[[thisLevel]] = signif(try(approx(x=thisNodeValueFunction$level,y=thisNodeValueFunction$value,xout=nodeLevels,rule=2)$y),6)
+          value.list[[thisNode]] = signif(try(approx(x=thisNodeValueFunction$level,y=thisNodeValueFunction$value,xout=nodeLevels,rule=2)$y),6)
           scenValue.list[[thisScen]] = value.list
-          nodeValues.df = as.data.frame(cbind(prob=probs,do.call("cbind",lapply(scenValue.list,function(scen,thisLevel,probs){quantile(scen[[thisLevel]],probs)},thisLevel,probs))))
+          nodeValues.df = as.data.frame(cbind(prob=probs,do.call("cbind",lapply(scenValue.list,function(scen,thisNode,probs){quantile(scen[[thisNode]],probs)},thisNode,probs))))
           nodeValuesJson = paste(apply(nodeValues.df,1,toJSON),collapse=",")
           nodeValuesJson = paste('{"metaData":{"root":"values","fields":',toJSON(names(nodeValues.df)),'},"values":[',nodeValuesJson,']}')
-          ##          pg.spi.exec(paste("UPDATE ",schema,".",thisNodeTable," SET modeled_values = '",nodeValuesJson,"' WHERE id = ",nodeSpec$id,sep=""))
         } # calculate the value function [end]
       } # thisScen [end]
 
@@ -120,41 +106,39 @@ simulcalcs <- function(g,graph.nodes,scenarios.nodes,schema,nsim=5){
         # values
         for(thisScen in scenarioNodes$name){
           thisIndexList = list(with(scenValue.list[[thisScen]],eval(parse(text=nodeSpec$equation))))
-          names(thisIndexList) = thisLevel
+          names(thisIndexList) = thisNode
           index.list[[thisScen]] = thisIndexList
-          scenLevel.list[[thisScen]][[thisLevel]] = thisIndexList[[1]]
+          scenLevel.list[[thisScen]][[thisNode]] = thisIndexList[[1]]
         }
-        nodeValues.df = as.data.frame(cbind(prob=probs,do.call("cbind",lapply(index.list,function(scen,thisLevel,probs){quantile(scen[[thisLevel]],probs)},thisLevel,probs))))
+        nodeValues.df = as.data.frame(cbind(prob=probs,do.call("cbind",lapply(index.list,function(scen,thisNode,probs){quantile(scen[[thisNode]],probs)},thisNode,probs))))
         nodeValuesJson = paste(apply(nodeValues.df,1,toJSON),collapse=",")
         nodeValuesJson = paste('{"metaData":{"root":"values","fields":',toJSON(names(nodeValues.df)),'},"values":[',nodeValuesJson,']}')
-        ##        pg.spi.exec(paste("UPDATE ",schema,".",thisNodeTable," SET modeled_values = '",nodeValuesJson,"' WHERE id = ",nodeSpec$id,sep=""))
       } # index
 
       if( nodeSpec$type == "function" ){
-        #         nodeValues.df = as.data.frame(do.call("cbind",lapply(scenLevel.list,function(scen,thisLevel){scen[[thisLevel]]},thisLevel)))
+        #         nodeValues.df = as.data.frame(do.call("cbind",lapply(scenLevel.list,function(scen,thisNode){scen[[thisNode]]},thisNode)))
         #         nodeValuesJson = toExtJSON(nodeValues.df)
         #         pg.spi.exec(paste("UPDATE ",schema,".",thisNodeTable," SET modeled_Levels = '",nodeLevelsJson,"' WHERE id = ",nodeSpec$id,sep=""))
       } else if( nodeSpec$class == "measure" | ( nodeSpec$class == "state" & nodeSpec$type == "equation" ) ) {
         nodeLevels.df = as.data.frame(cbind(prob=probs,
                                             do.call("cbind",lapply(scenLevel.list,
-                                                                   function(scen,thisLevel,probs){
-                                                                     return(quantile(scen[[thisLevel]],probs))
-                                                                   },thisLevel,probs))
+                                                                   function(scen,thisNode,probs){
+                                                                     return(quantile(scen[[thisNode]],probs))
+                                                                   },thisNode,probs))
         ))
         nodeLevelsJson = paste(apply(nodeLevels.df,1,toJSON),collapse=",")
         nodeLevelsJson = paste('{"metaData":{"root":"levels","fields":',toJSON(names(nodeLevels.df)),'},"levels":[',nodeLevelsJson,']}')
-        ##        pg.spi.exec(paste("UPDATE ",schema,".",thisNodeTable," SET modeled_levels = '",nodeLevelsJson,"' WHERE id = ",nodeSpec$id,sep=""))
       }
-    } # thisLevel [end]
+    } # thisNode [end]
 
-    # Figure out which nodes are "next" in line. Find all the unique children of the current level,
-    # and see which have parents that have data generated.
+    #' Figure out which nodes are "next" in line. Find all the unique children of the current level,
+    #' and see which have parents that have data generated.
     levelKids = unique(gRbase::children(level,g))
     level = levelKids[unlist(lapply(levelKids,function(node,nodesDone){ all((gRbase::parents(node,g)) %in% nodesDone )  }, nodesDone ) )]
   } # while [end]
 
   # Build scenario comparison charts
-  if( nrow(scenarioNodes) > 1 ) { #"index" %in% graph.nodes$type){
+  if( nrow(scenarioNodes) > 1 ) { #"index" %in% graphNodes$type){
     index.df = as.data.frame(do.call("rbind",lapply(index.list,function(x){as.data.frame(do.call("cbind",lapply(x,mean)))})))
     measures.df = do.call("rbind",lapply(scenValue.list,function(x){as.data.frame(do.call("cbind",lapply(x,mean)))}))
     measures.df = cbind(name=row.names(measures.df),measures.df)
@@ -169,7 +153,7 @@ simulcalcs <- function(g,graph.nodes,scenarios.nodes,schema,nsim=5){
       df$Scenario = names(scenLevel.list)[[i]]
       df
     })))
-    savoi(sims.df[,leaves],sims.df[,c(optionNodes,stochasticNodes)],schema,graph.nodes)
+    savoi(sims.df[,leaves],sims.df[,c(optionNodes,stochasticNodes)],schema,graphNodes)
 
     #     independent.df = as.data.frame(do.call("rbind",lapply(1:length(scenLevel.list),function(i){
     #       df = as.data.frame(do.call("cbind",scenLevel.list[[i]][stochasticNodes]))
@@ -177,23 +161,23 @@ simulcalcs <- function(g,graph.nodes,scenarios.nodes,schema,nsim=5){
     #       df$Scenario = names(scenLevel.list)[[i]]
     #       df
     #     })))
-    #     if( "option" %in% graph.nodes$type ){
-    #       for(i in 1:length(graph.nodes$name[graph.nodes$class == "option"])){ # i = 1
-    #         thisName = graph.nodes$name[graph.nodes$class == "option"][i]
-    #         thisSet = do.call("rbind",lapply(fromJSON(graph.nodes$specification[graph.nodes$name == thisName])$row,function(x)data.frame(level=x$level,Scenario=x$name)))
+    #     if( "option" %in% graphNodes$type ){
+    #       for(i in 1:length(graphNodes$name[graphNodes$class == "option"])){ # i = 1
+    #         thisName = graphNodes$name[graphNodes$class == "option"][i]
+    #         thisSet = do.call("rbind",lapply(fromJSON(graphNodes$specification[graphNodes$name == thisName])$row,function(x)data.frame(level=x$level,Scenario=x$name)))
     #         if(i ==1 ) {
     #           optionsLevels = thisSet
     #         }else{
     #           optionsLevels = merge(optionsLevels,thisSet,by="Scenario")
     #         }
     #       }
-    #       names(optionsLevels) = c("Scenario",graph.nodes$name[graph.nodes$class == "option"])
+    #       names(optionsLevels) = c("Scenario",graphNodes$name[graphNodes$class == "option"])
     #       #independent.df = merge(independent.df,optionsLevels,sort=F)[,-1]
     #       independent.df = merge(independent.df,optionsLevels,sort=F)
     #     }
     #     independent.df$Scenario = as.factor(independent.df$Scenario)
     #     response.df = scenLevel.list[[1]][leaves][[1]]
-    #     savoi(response.df,independent.df,schema,graph.nodes)
+    #     savoi(response.df,independent.df,schema,graphNodes)
   }
   return(paste('done with',nsim,'simulations'))
 }
@@ -261,11 +245,13 @@ simulnode <- function(spec,id,parentvec=NULL,data,n,scenId){
   # Match the cases:
   if(spec$class == "measure" | spec$class == "index"){
     sim <- with(data,eval(parse(text=spec$equation)))
+  }else if(spec$type == "constant" && length(spec$parameters)>1){
+    sim = as.data.frame(do.call("rbind",spec$parameters))
+    sim = unlist(sim$level[sim$id==scenId])
+    sim <- rep(as.numeric(sim),n)
   }else if(spec$type == "option"){
-    tempsim = as.data.frame(do.call("rbind",spec$row))
-    tempsim = unlist(tempsim$level[tempsim$id==scenId])
-    #    assign(dat[dat[,1]==spec$id,2],tempsim)
-    sim <- rep(tempsim,n)
+    sim = as.data.frame(do.call("rbind",spec$scenarios))
+    sim <- rep(unlist(sim[as.character(sim$id) == as.character(scenId),"level"]),n)
   }else if ( spec$type=="distribution" ){
     if( spec$name == "constant" ){
       sim = rep(eval(parse(text=spec$parameters)),n)

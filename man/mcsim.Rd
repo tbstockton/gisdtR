@@ -5,16 +5,18 @@
 \title{This is a wrapper function that calls the simulcalcs() function, which is the workhorse of the network simulations.
 Read nodes and edges tables from the database and build the DAG
 mcsim(schema,nodeTable,outputTable)
-Written by Tom Stockton and Will Barnett, November 2011.
-Updated 05-22-12, 07-04-2014
+Tom Stockton and Will Barnett, November 2011.
+Updated 05-22-12, 07-04-2014, 12-16-2016
 mcsim(schema='watershed', nodeTable='model')}
 \usage{
-mcsim(nodes, edges, nsim = 100)
+mcsim(nodes, edges, scenarios, nsim = 100)
 }
 \arguments{
 \item{nodes}{(JSON).}
 
 \item{edges}{(JSON).}
+
+\item{nsim, }{number of Monte carlo simulations to run.}
 }
 \value{
 Bayesian Network with posterior distributions.
@@ -23,8 +25,7 @@ Bayesian Network with posterior distributions.
 This is a wrapper function that calls the simulcalcs() function, which is the workhorse of the network simulations.
 Read nodes and edges tables from the database and build the DAG
 mcsim(schema,nodeTable,outputTable)
-Written by Tom Stockton and Will Barnett, November 2011.
-Updated 05-22-12, 07-04-2014
+Tom Stockton and Will Barnett, November 2011.
+Updated 05-22-12, 07-04-2014, 12-16-2016
 mcsim(schema='watershed', nodeTable='model')
 }
-

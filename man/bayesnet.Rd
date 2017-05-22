@@ -15,4 +15,3 @@ Bayesian Network with posterior distributions.
 \description{
 Solve Bayesian Network
 }
-
